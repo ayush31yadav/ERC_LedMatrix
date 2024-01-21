@@ -1,5 +1,6 @@
 import tkinter as tk
 import keyboard # for getting key inputs
+import time
 
 # =============================================
 # IMPORT ANY LIBRARY YOU WANT HERE
@@ -61,13 +62,23 @@ class object:
     maxX = 0
 
     def getBoundingBox(self, arr):
-        self.minY = 0
-        self.maxY = 0
-        self.minX = 0
-        self.maxX = 0
+        self.minY = None
+        self.maxY = None
+        self.minX = None
+        self.maxX = None
+
+        firstTime = True
 
         for key in arr.keys():
             for coord in arr[key]:
+                
+                if firstTime:
+                    self.minY = coord[1]
+                    self.maxY = coord[1]
+                    self.minX = coord[0]
+                    self.maxX = coord[0]
+                    firstTime = False
+
                 # X
                 if coord[0] < self.minX:
                     self.minX = coord[0]
@@ -188,44 +199,43 @@ class object:
 
         self.pixelArr[arrCoord_Y][arrCoord_X] = color
 
-
-def offset(obj, offset):
-    # this functions is used to check collisions with the objects already present in objArr
+# this functions is used to check collisions with the objects already present in objArr
+def checkOverlap(obj, newPos):
     global objArr
+    isOverLap = False
+    for ob in objArr:
+        if ob.collision and (ob != obj) and (ob.zVal == obj.zVal):
+            for y in range(len(ob.pixelArr)):
+                for x in range(len(ob.pixelArr[y])):
+                    if ob.pixelArr[y][x] is not None:
+                        coordX = x + ob.bound_origin[0] + ob.curr_pos[0]
+                        coordY = y + ob.bound_origin[1] + ob.curr_pos[1]
 
-    def checkOverlap(newPos):
-        isOverLap = False
-        for ob in objArr:
-            if ob.collision and (ob != obj) and (ob.zVal == obj.zVal):
-                for y in range(len(ob.pixelArr)):
-                    for x in range(len(ob.pixelArr[y])):
-                        if ob.pixelArr[y][x] is not None:
-                            coordX = x + ob.bound_origin[0] + ob.curr_pos[0]
-                            coordY = y + ob.bound_origin[1] + ob.curr_pos[1]
+                        for yN in range(len(obj.pixelArr)):
+                            for xN in range(len(obj.pixelArr[yN])):
+                                if obj.pixelArr[yN][xN] is not None:
+                                    coordNX = xN - obj.bound_origin[0] + newPos[0]
+                                    coordNY = yN - obj.bound_origin[1] + newPos[1]
 
-                            for yN in range(len(obj.pixelArr)):
-                                for xN in range(len(obj.pixelArr[yN])):
-                                    if obj.pixelArr[yN][xN] is not None:
-                                        coordNX = xN - obj.bound_origin[0] + newPos[0]
-                                        coordNY = yN - obj.bound_origin[1] + newPos[1]
-
-                                        if (coordNX == coordX) and (coordNY == coordY):
-                                            isOverLap = True
-                                    
-                                    if isOverLap:
-                                        break
+                                    if (coordNX == coordX) and (coordNY == coordY):
+                                        isOverLap = True
+                                
                                 if isOverLap:
                                     break
-                        
-                        if isOverLap:
-                            break
+                            if isOverLap:
+                                break
+                    
                     if isOverLap:
                         break
-            if isOverLap:
-                break
+                if isOverLap:
+                    break
+        if isOverLap:
+            break
 
-        # print(isOverLap) # DEBUG
-        return isOverLap
+    # print(isOverLap) # DEBUG
+    return isOverLap
+
+def offset(obj, offset):
 
     if offset[0] == 0:
         Xdir = 0
@@ -248,7 +258,7 @@ def offset(obj, offset):
             step = round((C2[1] - j[1]) / (abs(offset[0] - j[0])))
         j[0] += Xdir
 
-        isOverlapping = checkOverlap([
+        isOverlapping = checkOverlap(obj, [
             obj.curr_pos[0] + j[0],
             obj.curr_pos[1] + j[1]
         ])
@@ -261,7 +271,7 @@ def offset(obj, offset):
         for y in range(abs(step)):
             j[1] += Ydir
 
-            isOverlapping = checkOverlap([
+            isOverlapping = checkOverlap(obj, [
                 obj.curr_pos[0] + j[0],
                 obj.curr_pos[1] + j[1]
             ])
@@ -563,7 +573,7 @@ txtDict = {
 }
 
 
-def txtObj(txt, cursor, fill, zValue, stayInFrame):
+def txtObj(txt, cursor, fill, zValue, stayInFrame=True,collision=False):
     tLength = cursor[0]
     for c in txt:
         if c == '1':
@@ -600,15 +610,23 @@ def txtObj(txt, cursor, fill, zValue, stayInFrame):
             else:
                 travellingCursor[0] += 4
         
+        # centralize
+        for index in range(len(pointArr)):
+            pointArr[index] = [
+                pointArr[index][0] - cursor[0],
+                pointArr[index][1] - cursor[1]
+            ]
+        
         return object({
         fill:pointArr
         },{
             "z_value": zValue,
-            "pos": [int(cursor[0]/2), int(cursor[1]/2)],
-            "stayInFrame": stayInFrame
+            "pos": cursor,
+            "stayInFrame": stayInFrame,
+            "collision": collision
         })
 
-def rectangleObj(C1, C2, fill, zValue, stayInFrame):
+def rectangleObj(C1, C2, fill, zValue, stayInFrame=True,collision=False):
     Xsteps = C2[0] - C1[0]
     Ysteps = C2[1] - C1[1]
 
@@ -631,15 +649,25 @@ def rectangleObj(C1, C2, fill, zValue, stayInFrame):
     
         yPos += Ydir
 
+    yPos -= Ydir
+
+    # centralize
+    for index in range(len(pointArr)):
+        pointArr[index] = [
+            pointArr[index][0] - C1[0],
+            pointArr[index][1] - C1[1]
+        ]
+
     return object({
         fill:pointArr
     },{
         "z_value": zValue,
         "pos": C1,
-        "stayInFrame": stayInFrame
+        "stayInFrame": stayInFrame,
+        "collision": collision
     }) 
 
-def lineObj(C1, C2, fill, zValue, stayInFrame):
+def lineObj(C1, C2, fill, zValue, stayInFrame=True,collision=False):
     # this function returns a 'object' which is a line from coord C1 to C2 => coord = [C1, C2]
     # making point array
     Xsteps = C2[0] - C1[0]
@@ -690,7 +718,8 @@ def lineObj(C1, C2, fill, zValue, stayInFrame):
     },{
         "z_value": zValue,
         "pos": C1,
-        "stayInFrame": stayInFrame
+        "stayInFrame": stayInFrame,
+        "collision": collision
     })
 
 def getKeyState(key):
@@ -703,6 +732,9 @@ def getKeyState(key):
 objArr = [] # a list of all objects that exist on screen (only objects in this list will be rendered)
 end = False # make it True when the game has ended will end the code
 once = True # breaker
+timeGone = 0 # time Gone
+currTime = time.time()
+deltaTime = 0
 # =================================================================================================
 # =================================================================================================
 
@@ -852,56 +884,25 @@ def gameFrame(): # MAKE YOUR GAME IN THIS FUNCTIONS (will be called every frame)
 
         # CODE IN HERE RUNS ONCE PER GAME
         # ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓
-        once = False
-        obj1 = object({
-            "#00ff00": [[-1,0],[1,0],[0,1],[0,2]],
-            "#ffffff": [[0,0]]
-            },
-            {
-                "z_value": 4,
-                "pos": [11,25],
-                "collision" : True,
-                "stayInFrame": True
-            })
-        obj2 = object({
-            "#00ffff": [[1,0],[2,0],[0,1],[0,2]],
-            "#ff0000": [[0,0]]
-            },
-            {
-                "z_value": 4,
-                "pos": [5,30],
-                "collision" : True
-            })
-        line = txtObj("MADE",[0,0],"#ffffff",10,True)
-        line1 = txtObj("BY",[0,4],"#ffffff",10,True)
-        line2 = txtObj("AYUSH",[0,8],"#ffffff",10,True)
-        line3 = txtObj("YADAV",[0,12],"#ffffff",10,True)
-        # for x in line.pixelArr:
-        #     print(x)
-        objArr.append(obj2)
-        objArr.append(obj1)
-        objArr.append(line)
-        objArr.append(line1)
-        objArr.append(line2)
-        objArr.append(line3)
+        obj1 = txtObj("DED",[0,6],"#ff0000",10,True)
+        obj2 = txtObj("LMAO",[0,0],"#ffffff",10,True)
+        # obj1 = object({
+        #     "#ffffff" : [[0,0],[0,1],[0,2]]
+        # },{
+        #     "z_value" : 4,
+        #     "pos" : [1, 2],
+        #     "stayInFrame" : True,
+        #     "collision" : True
+        # })
 
-        # ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑ 
-         
+        objArr.append(obj1)
+        objArr.append(obj2)
+
+        # ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑        
     else:
         # CODE IN HERE RUNS ONCE PER FRAME
         # ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓
-        count += 1
-        if count == 15:
-            count = 0
-            # offset(obj1, [-1,0])
-        if getKeyState("A"):
-            offset(obj1, [-1,0])
-        if getKeyState("D"):
-            offset(obj1, [1,0])
-        if getKeyState("W"):
-            offset(obj1, [0,-1])
-        if getKeyState("S"):
-            offset(obj1, [0,1])
+        pass
         
         # ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑ 
 
@@ -974,11 +975,19 @@ def renderFrame(cv, side):
 # main loop of the game will run every frame
 def nxtFrame(root, cv, sc):
     global end
+    global currTime
+    global timeGone
 
     if not end:
         gameFrame()
 
         renderFrame(cv, sc)
+
+        rT = time.time()
+        deltaTime = rT - currTime
+        currTime = rT
+        timeGone += deltaTime
+        # print(timeGone, deltaTime)
 
         # RECALL the nxt frame function to
         root.after(35, nxtFrame, root, cv, sc)
