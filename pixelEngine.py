@@ -709,9 +709,18 @@ def lineObj(C1, C2, fill, zValue, stayInFrame=True,collision=False):
                 dY = round(inst_Ysteps / inst_Xsteps)
 
                 j = [j[0] + Xdir, j[1]]
+                if abs(dY) == 0:
+                    pointArr.append(j)
                 for c in range(abs(dY)):
                     j = [j[0], j[1] + Ydir]
                     pointArr.append(j)
+    
+    # centralize
+    for index in range(len(pointArr)):
+        pointArr[index] = [
+            pointArr[index][0] - C1[0],
+            pointArr[index][1] - C1[1]
+        ]
     
     return object({
         fill:pointArr
@@ -884,8 +893,7 @@ def gameFrame(): # MAKE YOUR GAME IN THIS FUNCTIONS (will be called every frame)
 
         # CODE IN HERE RUNS ONCE PER GAME
         # ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓
-        obj1 = txtObj("DED",[0,6],"#ff0000",10,True)
-        obj2 = txtObj("LMAO",[0,0],"#ffffff",10,True)
+        obj1 = lineObj([0,3],[5,5],"#ffffff",5)
         # obj1 = object({
         #     "#ffffff" : [[0,0],[0,1],[0,2]]
         # },{
@@ -896,7 +904,6 @@ def gameFrame(): # MAKE YOUR GAME IN THIS FUNCTIONS (will be called every frame)
         # })
 
         objArr.append(obj1)
-        objArr.append(obj2)
 
         # ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑        
     else:
