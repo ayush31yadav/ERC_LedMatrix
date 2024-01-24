@@ -18,7 +18,7 @@ background = "#000000" # default color of the empty space change if needed
 
 class object:
     # This class consists of one object (i.e. group of colored pixels)
-    # the object acts as a incompressible / indestructible entity that can translate and rotate in space
+    # the object acts as a incompressible / indestructible entity that can translate in space
     # the object structure is defined as follows
     # assume the object's origin to be at the origin of cartesian system then make a dictionary as follows
     # {
@@ -28,20 +28,26 @@ class object:
     #   ...
     # }
     # There can be many pixels of same color thus the above coloring system is taken
-    # color of indivisual pixel can be changed lateron using the function provided in this class [not recommended though
+    # color of indivisual pixel can be changed later on using the function provided in this class [not recommended though
     # considering the simplicity of our display aka LED MATRIX]
     # 'data' is a dictionary consisting of the following
     # {
     #   "z_value" : int,
     #   "pos" : [int, int],
-    #   "stayInFrame" : True
+    #   "stayInFrame" : True,
+    #   "collision" : True,
+    #   "rotation" : False
     # }
     # 'z_value' : indicates the position of the object in z axis, higher the value further it is infront of the LED MATRIX,
     # thus 0 is at the back and 10 is infront if in any scenario two objects overlap z_value will decide which will be 
     # displayed infront
     # 'pos' : it represents the (X,Y) coordinate of the origin of the object on the LED MATRIX
     # 'stayInFrame' : a basic system that prevent the object from going out of bound 
-    # 'collision' : a basic system that prevent the object from going out of bound 
+    # 'collision' : a basic system that prevent the object from colliding with other objects
+    # objects will collide only if offset() function is used and both the objects have "collision" set to True also both should
+    # share the same layer (i.e. they have same zVal)
+    # 'rotation' : enables object to rotate by multiples of 90 in either direction CW / CCW ... this system also checks if 
+    # rotation in the desired direction is possible
 
     # OBJECT VARIABLES
     curr_pos = [0,0] # default value
@@ -50,6 +56,9 @@ class object:
     zVal = 0 # the location of object outward from the plane (Z position)
     frameCollision = False # turned True when bound collision is enabled
     collision = False # turned True when collision is enabled
+    rotation = False # turned True when rotation is enabled
+    pixDict = None # storing pixel dictionary to be used when rotation enabled
+    rot_mid = None # stores mid position when rotation enabled
 
     # other variables
     topPad = 0
@@ -61,7 +70,16 @@ class object:
     minX = 0
     maxX = 0
 
-    def getBoundingBox(self, arr):
+    def getBoundingBox(self, arrObj):
+
+        if isinstance(arrObj, dict):
+            arr = []
+            for key in arrObj.keys():
+                for coord in arrObj[key]:
+                    arr.append(coord)
+        else:
+            arr = arrObj.copy()
+
         self.minY = None
         self.maxY = None
         self.minX = None
@@ -69,80 +87,81 @@ class object:
 
         firstTime = True
 
-        for key in arr.keys():
-            for coord in arr[key]:
-                
-                if firstTime:
-                    self.minY = coord[1]
-                    self.maxY = coord[1]
-                    self.minX = coord[0]
-                    self.maxX = coord[0]
-                    firstTime = False
+        print(arr)
+        for coord in arr:
+            
+            if firstTime:
+                self.minY = coord[1]
+                self.maxY = coord[1]
+                self.minX = coord[0]
+                self.maxX = coord[0]
+                firstTime = False
 
-                # X
-                if coord[0] < self.minX:
-                    self.minX = coord[0]
-                if coord[0] > self.maxX:
-                    self.maxX = coord[0]
+            # X
+            if coord[0] < self.minX:
+                self.minX = coord[0]
+            if coord[0] > self.maxX:
+                self.maxX = coord[0]
 
-                # Y
-                if coord[1] < self.minY:
-                    self.minY = coord[1]
-                if coord[1] > self.maxY:
-                    self.maxY = coord[1]
+            # Y
+            if coord[1] < self.minY:
+                self.minY = coord[1]
+            if coord[1] > self.maxY:
+                self.maxY = coord[1]
         
-        return [self.maxX-self.minX+1, self.maxY-self.minY+1]
+        if self.rotation:
+            # if rotation is enabled making a free pixel Arr to allow for rotation
+            j = 1 + 2 * max([
+                abs(self.maxX),
+                abs(self.minX),
+                abs(self.maxY),
+                abs(self.minY)
+            ])
+            return [j,j]
+        else:
+            return [self.maxX-self.minX+1, self.maxY-self.minY+1]
     
     def calcPadding(self):
-        self.lefPad = self.bound_origin[0]
-        self.rigPad = len(self.pixelArr[0]) - self.bound_origin[0] - 1
-        self.topPad = self.bound_origin[1]
-        self.botPad = len(self.pixelArr) - self.bound_origin[1] - 1
+        self.lefPad = -self.minX
+        self.rigPad = self.maxX
+        self.topPad = -self.minY
+        self.botPad = self.maxY
+        # self.lefPad = self.bound_origin[0]
+        # self.rigPad = len(self.pixelArr[0]) - self.bound_origin[0] - 1
+        # self.topPad = self.bound_origin[1]
+        # self.botPad = len(self.pixelArr) - self.bound_origin[1] - 1
 
-    def __init__(self, obj, data):
-        # here 'obj' holds the dictionary of colored pixels thus defining the object
-        # 'data' consists of other data as was stated above, these values are used to define the behaviour of this object
-        # making the blank pixel array
-
-        size = self.getBoundingBox(obj) # getting order of matrix
-
-        self.pixelArr = []
-        # making one row
-        row_temp = []
-        for i in range(size[0]):
-            row_temp.append(None)
-        # adding these rows in pixel array to create the blank array
-        for i in range(size[1]):
-            self.pixelArr.append(row_temp.copy())
-
+        # print(self.lefPad) # DEBUG
+        # print(self.rigPad)
+        # print(self.topPad)
+        # print(self.botPad)
+    
+    def calcBoundOrigin(self, size):
         # getting midpoint of the object and updating bound origin
         boundX = 0
         boundY = 0
 
-        if self.minX < 0:
-            boundX = -self.minX
+        if self.rotation:
+            mid = int((size[0] - 1)/2)
+            self.bound_origin = [mid, mid]
         else:
-            boundX = 0
-        
-        if self.minY < 0:
-            boundY = -self.minY
-        else:
-            boundY = 0
-        
-        self.bound_origin = [boundX, boundY]
-        
-        # coloring apropriate pixels
-        #   iterating through the dictionary and coloring the pixels
-        for k in obj.keys():
-            for coord in obj[k]:
-                # here k stores the hexadecimal value of the color and coord are the relative coordinated of pixels
-                arrCoord_X = self.bound_origin[0] + coord[0]
-                arrCoord_Y = self.bound_origin[1] + coord[1]
-                self.pixelArr[arrCoord_Y][arrCoord_X] = k
+            if self.minX < 0:
+                boundX = -self.minX
+            else:
+                boundX = 0
+            
+            if self.minY < 0:
+                boundY = -self.minY
+            else:
+                boundY = 0
+            
+            self.bound_origin = [boundX, boundY]
 
-        self.calcPadding() # calculate padding
-        
-        # assigning other variables
+    def __init__(self, obj, data):
+        # here 'obj' holds the dictionary of colored pixels thus defining the object
+        # 'data' consists of other data as was stated above, these values are used to define the behaviour of this object
+
+        # assigning basic variables
         if "pos" in data.keys():
             self.curr_pos = data["pos"]
         else:
@@ -162,6 +181,46 @@ class object:
             self.collision = data["collision"]
         else:
             self.collision = False
+
+        if "rotation" in data.keys():
+            self.rotation = data["rotation"]
+        else:
+            self.rotation = False
+        
+        if self.rotation:
+            self.pixDict = obj
+
+        # making the blank pixel array
+            
+        # getting order of matrix
+        size = self.getBoundingBox(obj)
+        
+        self.calcBoundOrigin(size)
+
+        if self.rotation:
+            mid = int((size[0] - 1)/2)
+            self.rot_mid = mid
+
+        self.pixelArr = []
+        # making one row
+        row_temp = []
+        for i in range(size[0]):
+            row_temp.append(None)
+        # adding these rows in pixel array to create the blank array
+        for i in range(size[1]):
+            self.pixelArr.append(row_temp.copy())
+
+        # coloring apropriate pixels
+        #   iterating through the dictionary and coloring the pixels
+        for k in obj.keys():
+            for coord in obj[k]:
+                # here k stores the hexadecimal value of the color and coord are the relative coordinated of pixels
+                arrCoord_X = self.bound_origin[0] + coord[0]
+                arrCoord_Y = self.bound_origin[1] + coord[1]
+                self.pixelArr[arrCoord_Y][arrCoord_X] = k
+
+        self.calcPadding() # calculate padding
+        
         
     
     def translate(self, delta):
@@ -208,14 +267,22 @@ def checkOverlap(obj, newPos):
             for y in range(len(ob.pixelArr)):
                 for x in range(len(ob.pixelArr[y])):
                     if ob.pixelArr[y][x] is not None:
-                        coordX = x + ob.bound_origin[0] + ob.curr_pos[0]
-                        coordY = y + ob.bound_origin[1] + ob.curr_pos[1]
+                        if ob.rotation:
+                            coordX = x - ob.rot_mid + ob.curr_pos[0]
+                            coordY = y - ob.rot_mid + ob.curr_pos[1]
+                        else:
+                            coordX = x + ob.curr_pos[0] + ob.minX
+                            coordY = y + ob.curr_pos[1] + ob.minY
 
                         for yN in range(len(obj.pixelArr)):
                             for xN in range(len(obj.pixelArr[yN])):
                                 if obj.pixelArr[yN][xN] is not None:
-                                    coordNX = xN - obj.bound_origin[0] + newPos[0]
-                                    coordNY = yN - obj.bound_origin[1] + newPos[1]
+                                    if obj.rotation:
+                                        coordNX = xN - obj.rot_mid + newPos[0]
+                                        coordNY = yN - obj.rot_mid + newPos[1]
+                                    else:
+                                        coordNX = xN + newPos[0] + obj.minX
+                                        coordNY = yN + newPos[1] + obj.minY
 
                                     if (coordNX == coordX) and (coordNY == coordY):
                                         isOverLap = True
@@ -282,6 +349,86 @@ def offset(obj, offset):
                 obj.translate([0,Ydir])
         
         if (j == C2):
+            break
+
+def rotate(obj, amt):
+    # this function rotates the given 'obj' by 'amt'
+    # amt +1 = CCW by 90 degree ; +2 = CCW by 180 degree
+    # amt -1 = CW  by 90 degree ; -2 = CW  by 180 degree
+    
+    def getNewPixArr():
+        mid = obj.rot_mid
+        newPixArr = []
+
+        # make empty
+        temp = []
+        for x in range(len(obj.pixelArr)):
+            temp.append(None)
+        for x in range(len(obj.pixelArr)):
+            newPixArr.append(temp.copy())
+        
+        # iterating through the original Array and making the necessary swaps
+        for y in range(len(obj.pixelArr)):
+            for x in range(len(obj.pixelArr)):
+                dX = x - mid
+                dY = y - mid
+
+                # CCW SWAP
+                if amt < 0:
+                    newPixArr[mid + dX][mid - dY] = obj.pixelArr[y][x]
+                else:
+                    newPixArr[mid - dX][mid + dY] = obj.pixelArr[y][x] 
+        return newPixArr
+    
+    preservedArr = obj.pixelArr.copy() # save PixArr
+
+    # resolve Rotate
+    while amt > 4:
+        amt -= 4
+    while amt < -4:
+        amt += 4
+    
+    # iterate rotation
+    for a in range(abs(amt)):
+        newArr = getNewPixArr()
+
+        # checking if this rotation causes collision
+        obj.pixelArr = newArr
+
+        coordArr = []
+        for y in range(len(newArr)):
+            for x in range(len(newArr)):
+                if newArr[y][x] is not None:
+                    coordArr.append([
+                        x - obj.rot_mid,
+                        y - obj.rot_mid
+                    ])
+
+        size = obj.getBoundingBox(coordArr)
+        obj.calcPadding()
+        obj.calcBoundOrigin(size)
+
+        if checkOverlap(obj,obj.curr_pos):
+            # reverting changes
+            newArr = preservedArr.copy()
+            obj.pixelArr = newArr
+
+            # recreating the coord map
+            coordArr = []
+            for y in range(len(newArr)):
+                for x in range(len(newArr)):
+                    if newArr[y][x] is not None:
+                        coordArr.append([
+                            x - obj.rot_mid,
+                            y - obj.rot_mid
+                        ])
+            
+            # recalculating the appropriate variables
+            size = obj.getBoundingBox(coordArr)
+            obj.calcPadding()
+            obj.calcBoundOrigin(size)
+
+            # breaking the loop
             break
 
 #         [0,0],[1,0],[2,0],
@@ -893,23 +1040,51 @@ def gameFrame(): # MAKE YOUR GAME IN THIS FUNCTIONS (will be called every frame)
 
         # CODE IN HERE RUNS ONCE PER GAME
         # ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓
-        obj1 = lineObj([0,3],[5,5],"#ffffff",5)
-        # obj1 = object({
-        #     "#ffffff" : [[0,0],[0,1],[0,2]]
-        # },{
-        #     "z_value" : 4,
-        #     "pos" : [1, 2],
-        #     "stayInFrame" : True,
-        #     "collision" : True
-        # })
+        obj1 = object({
+            "#ffffff" : [[0,1],[1,0],[2,0],[-1,0]],
+            "#ff0000" : [[0,0]]
+        },{
+            "z_value" : 4,
+            "pos" : [7, 18],
+            "stayInFrame" : True,
+            "collision" : True,
+            "rotation" : True
+        })
+        obj2 = object({
+            "#ffffff" : [[0,1],[1,0],[2,0],[-1,0]],
+            "#ff0000" : [[0,0]]
+        },{
+            "z_value" : 4,
+            "pos" : [7, 20],
+            "stayInFrame" : True,
+            "collision" : True,
+            "rotation" : True
+        })
 
         objArr.append(obj1)
+        objArr.append(obj2)
+        once = False
 
         # ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑        
     else:
         # CODE IN HERE RUNS ONCE PER FRAME
         # ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓
-        pass
+        if getKeyState("W"):
+            offset(obj1,[0,-1])
+        if getKeyState("A"):
+            offset(obj1,[-1,0])
+        if getKeyState("S"):
+            offset(obj1,[0,1])
+        if getKeyState("D"):
+            offset(obj1,[1,0])
+        if getKeyState("Q"):
+            if count >= 15:
+                rotate(obj1,1)
+                count = 0
+            else:
+                count += 1
+        else:
+            count = 0
         
         # ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑ 
 
