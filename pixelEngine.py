@@ -258,6 +258,22 @@ class object:
 
         self.pixelArr[arrCoord_Y][arrCoord_X] = color
 
+def updateCollision(obj, newPixArr):
+    obj.pixelArr = newPixArr
+
+    coordArr = []
+    for y in range(len(newPixArr)):
+        for x in range(len(newPixArr)):
+            if newPixArr[y][x] is not None:
+                coordArr.append([
+                    x - obj.rot_mid,
+                    y - obj.rot_mid
+                ])
+
+    size = obj.getBoundingBox(coordArr)
+    obj.calcPadding()
+    obj.calcBoundOrigin(size)
+
 # this functions is used to check collisions with the objects already present in objArr
 def checkOverlap(obj, newPos):
     global objArr
@@ -380,6 +396,9 @@ def rotate(obj, amt):
                     newPixArr[mid - dX][mid + dY] = obj.pixelArr[y][x] 
         return newPixArr
     
+    if not obj.rotation:
+        raise Exception("object set to rotation:False yet rotate function was accessed")
+    
     preservedArr = obj.pixelArr.copy() # save PixArr
 
     # resolve Rotate
@@ -390,43 +409,12 @@ def rotate(obj, amt):
     
     # iterate rotation
     for a in range(abs(amt)):
-        newArr = getNewPixArr()
+        updateCollision(obj, getNewPixArr())
 
         # checking if this rotation causes collision
-        obj.pixelArr = newArr
-
-        coordArr = []
-        for y in range(len(newArr)):
-            for x in range(len(newArr)):
-                if newArr[y][x] is not None:
-                    coordArr.append([
-                        x - obj.rot_mid,
-                        y - obj.rot_mid
-                    ])
-
-        size = obj.getBoundingBox(coordArr)
-        obj.calcPadding()
-        obj.calcBoundOrigin(size)
-
         if checkOverlap(obj,obj.curr_pos):
             # reverting changes
-            newArr = preservedArr.copy()
-            obj.pixelArr = newArr
-
-            # recreating the coord map
-            coordArr = []
-            for y in range(len(newArr)):
-                for x in range(len(newArr)):
-                    if newArr[y][x] is not None:
-                        coordArr.append([
-                            x - obj.rot_mid,
-                            y - obj.rot_mid
-                        ])
-            
-            # recalculating the appropriate variables
-            size = obj.getBoundingBox(coordArr)
-            obj.calcPadding()
-            obj.calcBoundOrigin(size)
+            updateCollision(obj, preservedArr.copy())
 
             # breaking the loop
             break
@@ -733,8 +721,7 @@ def txtObj(txt, cursor, fill, zValue, stayInFrame=True,collision=False):
             tLength += 4
     
     if tLength > 20:
-        print("txt length exceeded X pixel limit for the text = " + txt)
-        return None
+        raise Exception("txt length exceeded X pixel limit for the text = " + txt)
     else:
         pointArr = []
         travellingCursor = cursor.copy()
@@ -898,9 +885,7 @@ deltaTime = 0
 
 # define your games cross-frame variables here, these variables can store data and carry it across frames
 # ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓
-count = 0
 obj1 = None
-obj2 = None
 # ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑
 
 def gameFrame(): # MAKE YOUR GAME IN THIS FUNCTIONS (will be called every frame)
@@ -922,7 +907,8 @@ def gameFrame(): # MAKE YOUR GAME IN THIS FUNCTIONS (will be called every frame)
     #   "z_value" : int,
     #   "pos" : [int, int],
     #   "stayInFrame" : True,
-    #   "collision" : True
+    #   "collision" : True,
+    #   "rotation" : False
     # }
     # 'z_value' : indicates the position of the object in z axis, higher the value further it is infront of the LED MATRIX,
     # thus 0 is at the back and 10 is infront if in any scenario two objects overlap z_value will decide which will be 
@@ -932,6 +918,7 @@ def gameFrame(): # MAKE YOUR GAME IN THIS FUNCTIONS (will be called every frame)
     # 'collision' : a basic system that prevent the object from colliding with other objects
     # objects will collide only if offset() function is used and both the objects have "collision" set to True also both should
     # share the same layer (i.e. they have same zVal)
+    # 'rotation' : set it to true if you want the object to rotate in future, cannot be changed after object is created
     # 
     # once you have created an object you must add it to the "objArr" list, only the objects in this list shall be rendered
     # also the collision will be checked against the objects currently present in this list
@@ -943,6 +930,9 @@ def gameFrame(): # MAKE YOUR GAME IN THIS FUNCTIONS (will be called every frame)
     # to use the function follow this syntax
     # offset(object, [X,Y])
     # object = to the object that you want to move and [X,Y] is the offset vector
+    #
+    # to rotate an object use rotate(obj, amt) function to do that the object rotates in CCW direction by 90 * amt degrees
+    # use negative values for CW rotation
     #
     # if at some point you want to access the list of all pixels alongwith the colors just access the "matrix" variable you will need
     # to call it via global keyword "global matrix"
@@ -1028,64 +1018,32 @@ def gameFrame(): # MAKE YOUR GAME IN THIS FUNCTIONS (will be called every frame)
 
     # get your cross frame variables in this function using 'global' keyword HERE
     # ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓
-
-    global once
-    global count
     global obj1
-    global obj2
-
+    global once
     # ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑
 
     if once:
 
         # CODE IN HERE RUNS ONCE PER GAME
         # ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓
-        obj1 = object({
-            "#ffffff" : [[0,1],[1,0],[2,0],[-1,0]],
-            "#ff0000" : [[0,0]]
-        },{
-            "z_value" : 4,
-            "pos" : [7, 18],
-            "stayInFrame" : True,
-            "collision" : True,
-            "rotation" : True
-        })
-        obj2 = object({
-            "#ffffff" : [[0,1],[1,0],[2,0],[-1,0]],
-            "#ff0000" : [[0,0]]
-        },{
-            "z_value" : 4,
-            "pos" : [7, 20],
-            "stayInFrame" : True,
-            "collision" : True,
-            "rotation" : True
-        })
+        obj2 = txtObj("GAME",[0,0],"#00ff00",8,True,True)
+        obj1 = txtObj("OVER",[0,10],"#ff0000",8,True,True)
 
         objArr.append(obj1)
         objArr.append(obj2)
+        # ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑
         once = False
-
-        # ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑        
     else:
         # CODE IN HERE RUNS ONCE PER FRAME
         # ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓
         if getKeyState("W"):
-            offset(obj1,[0,-1])
-        if getKeyState("A"):
-            offset(obj1,[-1,0])
+            offset(obj1, [0,-1])
         if getKeyState("S"):
-            offset(obj1,[0,1])
+            offset(obj1, [0,1])
+        if getKeyState("A"):
+            offset(obj1, [-1,0])
         if getKeyState("D"):
-            offset(obj1,[1,0])
-        if getKeyState("Q"):
-            if count >= 15:
-                rotate(obj1,1)
-                count = 0
-            else:
-                count += 1
-        else:
-            count = 0
-        
+            offset(obj1, [1,0])
         # ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑ 
 
 
